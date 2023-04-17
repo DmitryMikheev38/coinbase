@@ -4,11 +4,14 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 	"log"
+	"time"
 )
 
 type Config struct {
 	CoinbaseURL string
 	DB          ConfigDB
+	SecInterval time.Duration
+	Coins       []string
 }
 
 func NewConfig() *Config {
@@ -25,6 +28,9 @@ func NewConfig() *Config {
 	cfg.DB.User = viper.GetString("DB_USER")
 	cfg.DB.Password = viper.GetString("DB_PWD")
 	cfg.DB.Name = viper.GetString("DB_NAME")
+
+	cfg.SecInterval = time.Duration(viper.GetInt64("INTERVAL"))
+	cfg.Coins = viper.GetStringSlice("COINS")
 
 	return cfg
 }

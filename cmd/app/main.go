@@ -30,42 +30,48 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go flushPriceTickJobTicker(ctx, 1*time.Second, priceUC)
-
-	go func() {
-		err = wsClient.SubscribeToTicketChannels(ctx, []string{"ETH-BTC", "ETH-USD", "BTC-EUR"})
-		if err != nil {
-			panic(err)
-		}
-	}()
+	tickerJobErr := flushPriceTickJobTicker(ctx, cfg.SecInterval*time.Second, priceUC)
+	tickerChanErr := wsClient.SubscribeToTicketChannels(ctx, cfg.Coins)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, os.Kill)
 
-	<-quit
+	select {
+	case err = <-tickerJobErr:
+		log.Println("ticker job error:", err)
+	case err = <-tickerChanErr:
+		log.Println("ticker channel error:", err)
+	case <-quit:
+	}
+
 	cancel()
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 	log.Println("Exit")
 }
 
-func flushPriceTickJobTicker(ctx context.Context, t time.Duration, uc *price.UseCase) {
+func flushPriceTickJobTicker(ctx context.Context, t time.Duration, uc *price.UseCase) chan error {
 	ticker := time.NewTicker(t)
+	errChan := make(chan error)
 
-	for {
-		select {
-		case <-ctx.Done():
-			err := uc.FlushTicks(context.Background())
-			if err != nil {
-				panic(err)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				err := uc.FlushTicks(context.Background())
+				if err != nil {
+					fmt.Println("flushPriceTickJobTicker: ", err)
+				}
+				break
+			case <-ticker.C:
+				err := uc.FlushTicks(ctx)
+				if err != nil {
+					errChan <- err
+				}
+				break
 			}
-			return
-		case t := <-ticker.C:
-			err := uc.FlushTicks(ctx)
-			if err != nil {
-				panic(err)
-			}
-			fmt.Println("Tick at", t)
 		}
-	}
+	}()
+
+	return errChan
 }

@@ -6,8 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/gorilla/websocket"
-	"golang.org/x/sync/errgroup"
 	"log"
+	"time"
 )
 
 type request struct {
@@ -25,18 +25,15 @@ func NewClient(url string, priceUC *price.UseCase) *Client {
 	return &Client{url: url, priceUC: priceUC}
 }
 
-func (c *Client) SubscribeToTicketChannels(ctx context.Context, ProductIDs []string) error {
-	g, errctx := errgroup.WithContext(ctx)
+func (c *Client) SubscribeToTicketChannels(ctx context.Context, ProductIDs []string) chan error {
+	errChan := make(chan error)
 	for _, ProductID := range ProductIDs {
-		func(id string) {
-			g.Go(func() error { return c.SubscribeToTicketChannel(errctx, id) })
+		go func(id string) {
+			errChan <- c.SubscribeToTicketChannel(ctx, id)
 		}(ProductID)
 	}
-	if err := g.Wait(); err != nil {
-		return err
-	}
 
-	return nil
+	return errChan
 }
 
 func (c *Client) SubscribeToTicketChannel(ctx context.Context, ProductIDs ...string) error {
@@ -57,31 +54,47 @@ func (c *Client) SubscribeToTicketChannel(ctx context.Context, ProductIDs ...str
 		return err
 	}
 
+	log.Println("subscribe to:", ProductIDs)
 	err = conn.WriteMessage(websocket.TextMessage, b)
 	if err != nil {
 		return err
 	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		for {
 			_, message, err := conn.ReadMessage()
 			if err != nil {
 				log.Println("read:", err)
-				continue
+				return
 			}
 			m := &models.Tick{}
 			err = json.Unmarshal(message, m)
 			if err != nil {
-				log.Println("json parse:", err)
-				return err
+				log.Println("unmarshal:", err)
+				continue
 			}
 			if m.ProductID == "" || m.BestAsk == "" || m.BestBid == "" {
 				continue
 			}
 			c.priceUC.SaveTick(m)
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			if err != nil {
+				return err
+			}
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+			}
+			return nil
 		}
 	}
 }
