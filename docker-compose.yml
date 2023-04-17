@@ -8,10 +8,10 @@ services:
     container_name: migrations
     environment:
       - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PWD=${DB_PWD:-postgres}
-      - DB_NAME=${DB_PWD:-oms}
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PWD=root
+      - DB_NAME=${DB_NAME}
     networks:
       - mynet
     depends_on:
@@ -22,12 +22,16 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: coinbase
+    restart: always
     environment:
       - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PWD=${DB_PWD:-postgres}
-      - DB_NAME=${DB_PWD:-oms}
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PWD=root
+      - DB_NAME=${DB_NAME}
+      - COINBASE_URL=wss://ws-feed.exchange.coinbase.com
+      - COINS=ETH-BTC ETH-USD BTC-EUR
+      - INTERVAL=1
     networks:
       - mynet
     depends_on:
