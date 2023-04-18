@@ -7,7 +7,6 @@ import (
 	"coinbase/internal/infra"
 	"coinbase/internal/usecase/price"
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -30,7 +29,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	tickerJobErr := flushPriceTickJobTicker(ctx, cfg.SecInterval*time.Second, priceUC)
+	tickerJobErr := priceUC.FlushPriceTickJobTicker(ctx, cfg.SecInterval*time.Second)
 	tickerChanErr := wsClient.SubscribeToTicketChannels(ctx, cfg.Coins)
 
 	quit := make(chan os.Signal, 1)
@@ -48,30 +47,4 @@ func main() {
 
 	time.Sleep(5 * time.Second)
 	log.Println("Exit")
-}
-
-func flushPriceTickJobTicker(ctx context.Context, t time.Duration, uc *price.UseCase) chan error {
-	ticker := time.NewTicker(t)
-	errChan := make(chan error)
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				err := uc.FlushTicks(context.Background())
-				if err != nil {
-					fmt.Println("flushPriceTickJobTicker: ", err)
-				}
-				break
-			case <-ticker.C:
-				err := uc.FlushTicks(ctx)
-				if err != nil {
-					errChan <- err
-				}
-				break
-			}
-		}
-	}()
-
-	return errChan
 }

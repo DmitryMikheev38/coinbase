@@ -8,7 +8,6 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/pressly/goose v2.7.0+incompatible
 	github.com/spf13/viper v1.15.0
-	golang.org/x/sync v0.1.0
 	gorm.io/driver/mysql v1.5.0
 	gorm.io/gorm v1.25.0
 )

@@ -3,6 +3,8 @@ package price
 import (
 	"coinbase/internal/models"
 	"context"
+	"fmt"
+	"time"
 )
 
 type Cache interface {
@@ -24,10 +26,39 @@ func New(cache Cache, tickRepo TickRepository) *UseCase {
 }
 
 func (uc *UseCase) SaveTick(tick *models.Tick) {
+	if tick == nil || tick.ProductID == "" || tick.BestAsk == "" || tick.BestBid == "" {
+		return
+	}
 	uc.cache.WriteTick(tick.ProductID, tick)
 }
 
 func (uc *UseCase) FlushTicks(ctx context.Context) error {
 	ticks := uc.cache.ReadAndDeleteAllTicks()
 	return uc.tickRepo.CreateTicks(ctx, ticks)
+}
+
+func (uc *UseCase) FlushPriceTickJobTicker(ctx context.Context, t time.Duration) chan error {
+	ticker := time.NewTicker(t)
+	errChan := make(chan error)
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				err := uc.FlushTicks(context.Background())
+				if err != nil {
+					fmt.Println("flushPriceTickJobTicker: ", err)
+				}
+				break
+			case <-ticker.C:
+				err := uc.FlushTicks(ctx)
+				if err != nil {
+					errChan <- err
+				}
+				break
+			}
+		}
+	}()
+
+	return errChan
 }

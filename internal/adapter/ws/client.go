@@ -76,9 +76,6 @@ func (c *Client) SubscribeToTicketChannel(ctx context.Context, ProductIDs ...str
 				log.Println("unmarshal:", err)
 				continue
 			}
-			if m.ProductID == "" || m.BestAsk == "" || m.BestBid == "" {
-				continue
-			}
 			c.priceUC.SaveTick(m)
 		}
 	}()
